@@ -1,0 +1,6 @@
+{
+  "name": "IAut Clic",
+  "description": "Autoclicker com mouse físico-digital visível na tela, sobreposição flutuante sobre outros jogos, serviço de acessibilidade para toques no Chrome, navegador autônomo e Cérebro IA com banco de sabedoria e profissões evolutivas sem chave de API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
