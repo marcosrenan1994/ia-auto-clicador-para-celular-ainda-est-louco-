@@ -45,6 +45,11 @@ object OverlayBridge {
         data object RemoveLastMultiPoint : OverlayCommand
         data class SetCpsRate(val cps: Int) : OverlayCommand
         data class SelectTargetPoint(val pointIndex: Int) : OverlayCommand
+
+        // Live Voice & Emergency Kill Switch Commands
+        data object EmergencyKillSwitch : OverlayCommand
+        data object ToggleVoiceListening : OverlayCommand
+        data object SwitchCameraFacing : OverlayCommand
     }
 
     // State mirrored from ViewModel to Overlay
@@ -57,6 +62,12 @@ object OverlayBridge {
     val pointerVisible = MutableStateFlow(true)
     val pointerStyle = MutableStateFlow(PointerStyle.MOUSE_ARROW)
     val isOverlayActive = MutableStateFlow(false)
+
+    // Live Voice Recognition & Emergency Safety States
+    val lastVoiceCommandHeard = MutableStateFlow("")
+    val isVoiceListeningActive = MutableStateFlow(false)
+    val isTtsAudibleActive = MutableStateFlow(true)
+    val isLiveCameraModeActive = MutableStateFlow(false)
 
     // Microsoft Store Cloned Features State
     val currentCps = MutableStateFlow(100)

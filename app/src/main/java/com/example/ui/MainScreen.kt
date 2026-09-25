@@ -31,7 +31,11 @@ import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -67,6 +71,7 @@ import com.example.ui.tabs.BrainTab
 import com.example.ui.tabs.BrowserTab
 import com.example.ui.tabs.DashboardTab
 import com.example.ui.tabs.ForexArbitrageTab
+import com.example.ui.tabs.LiveVisionAudioTab
 import com.example.ui.tabs.MouseArenaTab
 import com.example.ui.tabs.OverlayTab
 import com.example.ui.tabs.ProfilesTab
@@ -151,7 +156,8 @@ fun MainScreen(
         AppTab.MOUSE_ARENA,
         AppTab.BROWSER,
         AppTab.BRAIN,
-        AppTab.AI_SCIENTIST
+        AppTab.AI_SCIENTIST,
+        AppTab.LIVE_CAMERA_VOICE
     )
 
     Scaffold(
@@ -179,6 +185,29 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        // Quick Emergency Stop Kill Switch Button
+                        Button(
+                            onClick = { viewModel.emergencyStopAll() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .testTag("topbar_emergency_stop_button")
+                        ) {
+                            Icon(
+                                Icons.Default.Stop,
+                                contentDescription = "Parar Tudo",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(4.dp))
+                            Text(
+                                text = "PARAR",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, color = Color.White)
+                            )
+                        }
+
                         // Live Status Badge
                         val badgeColor = when (uiState.status) {
                             AutomationStatus.IDLE -> Color(0xFF94A3B8)
@@ -225,6 +254,11 @@ fun MainScreen(
                             .padding(horizontal = 12.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        FilterChip(
+                            selected = uiState.selectedTab == AppTab.LIVE_CAMERA_VOICE,
+                            onClick = { viewModel.setTab(AppTab.LIVE_CAMERA_VOICE) },
+                            label = { Text("🔴 Live Câmera & Voz", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
                         FilterChip(
                             selected = uiState.selectedTab == AppTab.QUANTUM_COUNCIL,
                             onClick = { viewModel.setTab(AppTab.QUANTUM_COUNCIL) },
@@ -393,6 +427,12 @@ fun MainScreen(
                 AppTab.AI_SCIENTIST -> {
                     AiScientistTab(
                         uiState = uiState,
+                        viewModel = viewModel
+                    )
+                }
+                AppTab.LIVE_CAMERA_VOICE -> {
+                    LiveVisionAudioTab(
+                        state = uiState,
                         viewModel = viewModel
                     )
                 }

@@ -125,13 +125,65 @@ fun DashboardTab(
             }
         }
 
-        // Action Control Center (Play, Pause, Stop, Test)
+        // Action Control Center (Play, Pause, Stop, Emergency Kill Switch, Test)
+        item(key = "voice_live_banner") {
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("dashboard_voice_banner"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                border = CardDefaults.outlinedCardBorder()
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(if (uiState.isVoiceAssistantListening) Color(0xFF10B981) else Color(0xFF334155)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Comandos de Voz 24/7 & Câmeras",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                        Text(
+                            text = "Diga \"ia parar\" a qualquer momento para travar os cliques.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    Button(
+                        onClick = { viewModel.setTab(com.example.viewmodel.AppTab.LIVE_CAMERA_VOICE) },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("Ver Live", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
         item(key = "action_controls_card") {
             ActionControlsCard(
                 uiState = uiState,
                 onStart = { viewModel.startAutomation() },
                 onPause = { viewModel.pauseAutomation() },
                 onStop = { viewModel.stopAutomation() },
+                onEmergencyStop = { viewModel.emergencyStopAll() },
                 onTestClick = { viewModel.performManualTest() }
             )
         }
@@ -350,6 +402,7 @@ private fun ActionControlsCard(
     onStart: () -> Unit,
     onPause: () -> Unit,
     onStop: () -> Unit,
+    onEmergencyStop: () -> Unit,
     onTestClick: () -> Unit
 ) {
     Card(
@@ -394,7 +447,7 @@ private fun ActionControlsCard(
 
                 Button(
                     onClick = onStop,
-                    enabled = uiState.status != AutomationStatus.IDLE,
+                    enabled = uiState.status != AutomationStatus.IDLE || uiState.isAutonomousRoutineActive,
                     modifier = Modifier.weight(1f).height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(10.dp)
@@ -403,6 +456,24 @@ private fun ActionControlsCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Parar")
                 }
+            }
+
+            // Standalone Emergency Killswitch Button (Always Active!)
+            Button(
+                onClick = onEmergencyStop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("action_controls_emergency_stop"),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(22.dp), tint = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "🚨 PARAR TUDO AGORA (KILL SWITCH)",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold, color = Color.White)
+                )
             }
 
             OutlinedButton(

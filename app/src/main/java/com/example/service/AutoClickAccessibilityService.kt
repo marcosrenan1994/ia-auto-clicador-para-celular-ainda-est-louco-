@@ -5,6 +5,7 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Build
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * Core Accessibility Service responsible for physically injecting touches,
  * taps, and gestures into any external app (Google Chrome, games, Android OS UI)
  * without requiring root access.
+ * Enhanced with Hardware Volume Key Kill Switch and Emergency Halt protection.
  */
 class AutoClickAccessibilityService : AccessibilityService() {
 
@@ -22,6 +24,20 @@ class AutoClickAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: AutoClickAccessibilityService? = null
             private set
+
+        @Volatile
+        var isEmergencyHalted = false
+            private set
+
+        fun clearAllGestures() {
+            isEmergencyHalted = true
+            Log.w(TAG, "EMERGENCY HALT: All physical touch dispatches are forcibly blocked.")
+        }
+
+        fun resumeGestures() {
+            isEmergencyHalted = false
+            Log.i(TAG, "Gestures resumed.")
+        }
 
         private val _isServiceActive = MutableStateFlow(false)
         val isServiceActive = _isServiceActive.asStateFlow()
@@ -37,6 +53,11 @@ class AutoClickAccessibilityService : AccessibilityService() {
             onSuccess: (() -> Unit)? = null,
             onFailure: (() -> Unit)? = null
         ): Boolean {
+            if (isEmergencyHalted) {
+                onFailure?.invoke()
+                return false
+            }
+
             val service = instance ?: return false
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
 
@@ -83,6 +104,7 @@ class AutoClickAccessibilityService : AccessibilityService() {
             durationMs: Long = 250L,
             onSuccess: (() -> Unit)? = null
         ): Boolean {
+            if (isEmergencyHalted) return false
             val service = instance ?: return false
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
 
@@ -144,6 +166,26 @@ class AutoClickAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Accessibility events can optionally be parsed for view hierarchy analysis
+    }
+
+    override fun onKeyEvent(event: KeyEvent?): Boolean {
+        if (event == null) return false
+        // Emergency Panic Killswitch: Volume Down or Volume Up stops all clicking loops immediately!
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_UP -> {
+                    if (OverlayBridge.automationStatus.value != com.example.viewmodel.AutomationStatus.IDLE) {
+                        Log.w(TAG, "HARDWARE VOLUME KEY PRESSED! Triggering emergency killswitch.")
+                        clearAllGestures()
+                        OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.EmergencyKillSwitch)
+                        OverlayBridge.automationStatus.value = com.example.viewmodel.AutomationStatus.IDLE
+                        OverlayBridge.clickCounter.value = 0
+                        return true // Consume key event for safety
+                    }
+                }
+            }
+        }
+        return super.onKeyEvent(event)
     }
 
     override fun onInterrupt() {

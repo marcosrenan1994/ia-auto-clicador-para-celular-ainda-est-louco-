@@ -62,6 +62,7 @@ data class ExecutionStats(
 enum class AppTab(val label: String) {
     CONTROLS("Painel Turbo"),
     VISUAL_TRIGGERS("Gatilhos & Macros"),
+    LIVE_CAMERA_VOICE("Modo Live 24/7 & Câmeras"),
     PROFILES("Perfis Microsoft"),
     OVERLAY("Sobreposição HUD"),
     QUANTUM_COUNCIL("Sala Quântica"),
@@ -123,6 +124,17 @@ data class MainUiState(
     val recordedMacroSteps: List<MacroStep> = emptyList(),
     val isMacroPlaying: Boolean = false,
     val macroPlayingStep: Int = -1,
+
+    // Live Mode: Cameras (Front/Rear) & 24/7 Voice Listener & Audible TTS
+    val isLiveCameraActive: Boolean = false,
+    val cameraFacingFront: Boolean = false, // false = Back, true = Front
+    val isVoiceAssistantListening: Boolean = false,
+    val isVoiceAudibleEnabled: Boolean = true,
+    val lastVoiceCommandHeard: String = "",
+    val lastVoiceSpokenResponse: String = "Assistente pronto para escutar.",
+    val audioEnergyLevel: Float = 0f,
+    val hasCameraPermission: Boolean = false,
+    val hasAudioPermission: Boolean = false,
 
     // Visual Pointer & Cursor Settings
     val isMousePointerVisible: Boolean = true,

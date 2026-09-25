@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -122,12 +123,23 @@ class FloatingOverlayService : Service() {
             notificationManager.createNotificationChannel(channel)
         }
 
+        val emergencyIntent = Intent(this, EmergencyStopReceiver::class.java).apply {
+            action = EmergencyStopReceiver.ACTION_EMERGENCY_STOP
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
+        val emergencyPendingIntent = PendingIntent.getBroadcast(this, 999, emergencyIntent, flags)
+
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("IAut Clic: HUD Windows 11 Glassmorphism")
-            .setContentText("Auto-clicker 1000 CPS, gatilhos visuais e macros ativos.")
+            .setContentTitle("🚨 IAut Clic (EMERGÊNCIA DISPONÍVEL)")
+            .setContentText("Auto-clicker ativo. Pressione o botão abaixo para parar tudo.")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .addAction(
+                android.R.drawable.ic_delete,
+                "🚨 PARAR TUDO AGORA (KILL SWITCH)",
+                emergencyPendingIntent
+            )
             .build()
 
         try {
@@ -169,19 +181,22 @@ class FloatingOverlayService : Service() {
         }
         controlParams = params
 
+        val density = resources.displayMetrics.density
+        fun dp(value: Int): Int = (value * density + 0.5f).toInt()
+
         // Windows 11 Glassmorphism root container
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 12, 16, 12)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
             gravity = Gravity.CENTER_HORIZONTAL
 
             val background = GradientDrawable().apply {
-                setColor(Color.parseColor("#E60F172A")) // Translucent dark acrylic mica
-                cornerRadius = 28f
-                setStroke(2, Color.parseColor("#00E5FF")) // Cyber cyan neon border
+                setColor(Color.parseColor("#EE0F172A")) // Translucent dark acrylic mica
+                cornerRadius = 24f * density
+                setStroke(dp(2), Color.parseColor("#00E5FF")) // Cyber cyan neon border
             }
             setBackground(background)
-            elevation = 28f
+            elevation = 28f * density
         }
 
         // Top Row: Status, CPS Badge, Main Controls & Collapse Toggle
@@ -201,8 +216,8 @@ class FloatingOverlayService : Service() {
                 setColor(Color.parseColor("#94A3B8")) // Default idle gray
             }
             background = dot
-            layoutParams = LinearLayout.LayoutParams(20, 20).apply {
-                rightMargin = 10
+            layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply {
+                rightMargin = dp(8)
             }
         }
         statusIndicator = statusDot
@@ -212,19 +227,19 @@ class FloatingOverlayService : Service() {
         val cpsPill = TextView(this).apply {
             text = "⚡ 1000 CPS"
             setTextColor(Color.parseColor("#00E5FF"))
-            textSize = 10.5f
+            textSize = 11f
             val pillBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#3300E5FF"))
-                cornerRadius = 14f
-                setStroke(1, Color.parseColor("#00E5FF"))
+                cornerRadius = 14f * density
+                setStroke(dp(1), Color.parseColor("#00E5FF"))
             }
             background = pillBg
-            setPadding(12, 4, 12, 4)
+            setPadding(dp(10), dp(4), dp(10), dp(4))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                rightMargin = 10
+                rightMargin = dp(8)
             }
         }
         cpsBadgeView = cpsPill
@@ -234,24 +249,30 @@ class FloatingOverlayService : Service() {
         val infoText = TextView(this).apply {
             text = "0 clics"
             setTextColor(Color.WHITE)
-            textSize = 11f
+            textSize = 12f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                rightMargin = 10
+                rightMargin = dp(8)
             }
         }
         statsTextView = infoText
         topRow.addView(infoText)
 
-        // Play / Pause Button
+        // Play / Pause Button (Large & Touch-friendly)
         val playPauseBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_media_play)
             setColorFilter(Color.parseColor("#38BDF8"))
-            layoutParams = LinearLayout.LayoutParams(48, 48).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply {
+                rightMargin = dp(6)
             }
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            val btnBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#3338BDF8"))
+                cornerRadius = 12f * density
+            }
+            background = btnBg
             setOnClickListener {
                 if (OverlayBridge.automationStatus.value == AutomationStatus.RUNNING) {
                     OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.PauseAutomation)
@@ -263,13 +284,55 @@ class FloatingOverlayService : Service() {
         actionPlayPauseIcon = playPauseBtn
         topRow.addView(playPauseBtn)
 
+        // Huge Emergency Kill Switch Button (Stops ALL clicking immediately!)
+        val emergencyKillBtn = TextView(this).apply {
+            text = "🚨 STOP"
+            setTextColor(Color.WHITE)
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            val killBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#DC2626")) // Solid crimson red
+                cornerRadius = 12f * density
+                setStroke(dp(1), Color.WHITE)
+            }
+            background = killBg
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(44)
+            ).apply {
+                rightMargin = dp(6)
+            }
+            gravity = Gravity.CENTER
+            setOnClickListener {
+                OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.EmergencyKillSwitch)
+                AutoClickAccessibilityService.clearAllGestures()
+            }
+        }
+        topRow.addView(emergencyKillBtn)
+
+        // Live Voice Command Listener Button
+        val voiceMicBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_btn_speak_now)
+            setColorFilter(Color.parseColor("#38BDF8"))
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                rightMargin = dp(6)
+            }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setOnClickListener {
+                OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.ToggleVoiceListening)
+            }
+        }
+        topRow.addView(voiceMicBtn)
+
         // Smart Visual Trigger Scanner Button
         val triggerBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_search)
             setColorFilter(Color.parseColor("#10B981")) // Emerald green
-            layoutParams = LinearLayout.LayoutParams(48, 48).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                rightMargin = dp(6)
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
                 OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.ToggleVisualTriggerScanner)
             }
@@ -281,9 +344,10 @@ class FloatingOverlayService : Service() {
         val macroBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.presence_online)
             setColorFilter(Color.parseColor("#EF4444")) // Crimson record
-            layoutParams = LinearLayout.LayoutParams(44, 44).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                rightMargin = dp(6)
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
                 OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.ToggleMacroRecording)
             }
@@ -295,9 +359,10 @@ class FloatingOverlayService : Service() {
         val addPointBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_input_add)
             setColorFilter(Color.parseColor("#A855F7")) // Violet
-            layoutParams = LinearLayout.LayoutParams(44, 44).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                rightMargin = dp(6)
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
                 OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.AddMultiPoint)
             }
@@ -308,9 +373,10 @@ class FloatingOverlayService : Service() {
         val centerMouseBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_mylocation)
             setColorFilter(Color.parseColor("#06B6D4")) // Cyan
-            layoutParams = LinearLayout.LayoutParams(44, 44).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                rightMargin = dp(6)
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
                 OverlayBridge.sendCommand(OverlayBridge.OverlayCommand.CenterPointer)
             }
@@ -321,9 +387,10 @@ class FloatingOverlayService : Service() {
         val expandBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.arrow_down_float)
             setColorFilter(Color.parseColor("#94A3B8"))
-            layoutParams = LinearLayout.LayoutParams(40, 40).apply {
-                rightMargin = 8
+            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+                rightMargin = dp(6)
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
                 isExpanded = !isExpanded
                 expandedRowsContainer?.visibility = if (isExpanded) View.VISIBLE else View.GONE
@@ -336,7 +403,8 @@ class FloatingOverlayService : Service() {
         val closeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setColorFilter(Color.parseColor("#64748B"))
-            layoutParams = LinearLayout.LayoutParams(40, 40)
+            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+            setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
                 stopSelf()
             }

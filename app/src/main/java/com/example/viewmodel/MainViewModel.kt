@@ -13,6 +13,8 @@ import com.example.data.MicrosoftProfilePresets
 import com.example.data.QuantumCouncilEngine
 import com.example.data.forex.ArbitrageOpportunity
 import com.example.data.forex.ForexArbitrageEngine
+import com.example.data.voice.VoiceCommandAction
+import com.example.data.voice.VoiceLiveAssistantEngine
 import com.example.data.local.AppDatabase
 import com.example.data.local.AppRepository
 import com.example.data.local.entity.ArbitrageSignalEntity
@@ -72,6 +74,7 @@ class MainViewModel(application: Application) :
     private val quantumEngine = QuantumCouncilEngine()
     private val repository = AppRepository(AppDatabase.getDatabase(application))
     val msManager = MicrosoftClickerManager(viewModelScope)
+    val voiceAssistantEngine = VoiceLiveAssistantEngine(application)
 
     private var quantumCouncilJob: Job? = null
 
@@ -86,7 +89,8 @@ class MainViewModel(application: Application) :
         observeQuantumCouncil()
         startQuantumCouncilLoop()
         observeMicrosoftManager()
-        addLog("IAut Clic inicializado com Engine 1000 CPS, Gatilhos Visuais e Macros da Microsoft Store.", LogLevel.INFO)
+        initVoiceAssistant()
+        addLog("IAut Clic inicializado com Engine 1000 CPS, Comandos de Voz 24/7 e Parada de Emergência.", LogLevel.INFO)
     }
 
     private fun observeQuantumCouncil() {
@@ -197,6 +201,11 @@ class MainViewModel(application: Application) :
                     is OverlayBridge.OverlayCommand.RemoveLastMultiPoint -> removeLastMultiPoint()
                     is OverlayBridge.OverlayCommand.SetCpsRate -> setTargetCps(command.cps)
                     is OverlayBridge.OverlayCommand.SelectTargetPoint -> selectMultiPoint(command.pointIndex)
+                    is OverlayBridge.OverlayCommand.EmergencyKillSwitch -> emergencyStopAll()
+                    is OverlayBridge.OverlayCommand.ToggleVoiceListening -> {
+                        if (currentState.isVoiceAssistantListening) stopVoiceListening() else startVoiceListening()
+                    }
+                    is OverlayBridge.OverlayCommand.SwitchCameraFacing -> switchCameraFacing()
                     is OverlayBridge.OverlayCommand.ScrollDown,
                     is OverlayBridge.OverlayCommand.ScrollUp,
                     is OverlayBridge.OverlayCommand.CenterPointer,
@@ -259,6 +268,7 @@ class MainViewModel(application: Application) :
      */
     fun startAutomation() {
         if (currentState.status == AutomationStatus.RUNNING) return
+        AutoClickAccessibilityService.resumeGestures()
 
         val isResume = currentState.status == AutomationStatus.PAUSED
         updateState {
@@ -354,6 +364,7 @@ class MainViewModel(application: Application) :
     fun stopAutomation() {
         automationJob?.cancel()
         autonomousRoutineJob?.cancel()
+        AutoClickAccessibilityService.clearAllGestures()
         updateState {
             copy(
                 status = AutomationStatus.IDLE,
@@ -363,7 +374,7 @@ class MainViewModel(application: Application) :
         }
         OverlayBridge.automationStatus.value = AutomationStatus.IDLE
         OverlayBridge.clickCounter.value = 0
-        addLog("Automação finalizada. Contador zerado.", LogLevel.INFO)
+        addLog("Automação finalizada. Contador zerado e gestos limpos.", LogLevel.INFO)
         sendEffect(MainUiEffect.ShowSnackbar("Automação finalizada"))
     }
 
@@ -1372,6 +1383,127 @@ class MainViewModel(application: Application) :
         sendEffect(MainUiEffect.ShowSnackbar("Cientista ${newDoctor.name} conectado com sucesso!"))
     }
 
+    private fun initVoiceAssistant() {
+        voiceAssistantEngine.onCommandTriggered = { voiceAction ->
+            when (voiceAction) {
+                VoiceCommandAction.STOP_ALL -> {
+                    emergencyStopAll()
+                }
+                VoiceCommandAction.START_GAME -> {
+                    setTargetCps(50)
+                    startAutomation()
+                    addLog("Comando de Voz: 'ia jogar esse jogo' - Modo gamer ativado com 50 CPS!", LogLevel.SUCCESS)
+                }
+                VoiceCommandAction.START_CLICKER -> {
+                    startAutomation()
+                }
+                VoiceCommandAction.PAUSE_CLICKER -> {
+                    pauseAutomation()
+                }
+                VoiceCommandAction.MAX_SPEED_1000 -> {
+                    setTargetCps(1000)
+                    setClickRateMode(ClickRateMode.CPS)
+                    addLog("Comando de Voz: 'ia velocidade mil' - Modo 1000 CPS ativado!", LogLevel.SUCCESS)
+                }
+                VoiceCommandAction.SWITCH_CAMERA -> {
+                    switchCameraFacing()
+                }
+                VoiceCommandAction.LIVE_STATUS -> {
+                    addLog("Comando de Voz: Status solicitado. Status: ${currentState.status.name}, CPS: ${currentState.targetCps}", LogLevel.INFO)
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            voiceAssistantEngine.isListening.collectLatest { listening ->
+                updateState { copy(isVoiceAssistantListening = listening) }
+                OverlayBridge.isVoiceListeningActive.value = listening
+            }
+        }
+
+        viewModelScope.launch {
+            voiceAssistantEngine.lastHeardText.collectLatest { heard ->
+                updateState { copy(lastVoiceCommandHeard = heard) }
+                OverlayBridge.lastVoiceCommandHeard.value = heard
+            }
+        }
+
+        viewModelScope.launch {
+            voiceAssistantEngine.lastVoiceResponse.collectLatest { resp ->
+                updateState { copy(lastVoiceSpokenResponse = resp) }
+            }
+        }
+
+        viewModelScope.launch {
+            voiceAssistantEngine.audioEnergyLevel.collectLatest { level ->
+                updateState { copy(audioEnergyLevel = level) }
+            }
+        }
+    }
+
+    /**
+     * Emergency Kill Switch: IMMEDIATELY halts all clicking loops, accessibility dispatches,
+     * resets state to IDLE, and audibly confirms via voice.
+     */
+    fun emergencyStopAll() {
+        automationJob?.cancel()
+        automationJob = null
+        autonomousRoutineJob?.cancel()
+        autonomousRoutineJob = null
+        autonomousPatrolJob?.cancel()
+        autonomousPatrolJob = null
+
+        AutoClickAccessibilityService.clearAllGestures()
+
+        updateState {
+            copy(
+                status = AutomationStatus.IDLE,
+                completedClicks = 0,
+                isAutonomousRoutineActive = false,
+                isAutonomousPatrolRunning = false
+            )
+        }
+
+        OverlayBridge.automationStatus.value = AutomationStatus.IDLE
+        OverlayBridge.clickCounter.value = 0
+        OverlayBridge.aiStatusMessage.value = "IA PARADA EM EMERGÊNCIA"
+
+        voiceAssistantEngine.speakAloud("Automação interrompida imediatamente! Estou completamente parado, mestre.")
+        addLog("🚨 PARADA DE EMERGÊNCIA ACIONADA! Todos os cliques, rotinas e serviços foram travados com segurança.", LogLevel.ERROR)
+        sendEffect(MainUiEffect.ShowSnackbar("🚨 PARADA DE EMERGÊNCIA: Todos os cliques travados!"))
+    }
+
+    fun startVoiceListening() {
+        voiceAssistantEngine.startListening247()
+        updateState { copy(isVoiceAssistantListening = true) }
+        OverlayBridge.isVoiceListeningActive.value = true
+        addLog("Escuta contínua de voz 24/7 iniciada. Fale 'ia parar' a qualquer momento para travar tudo.", LogLevel.INFO)
+    }
+
+    fun stopVoiceListening() {
+        voiceAssistantEngine.stopListening()
+        updateState { copy(isVoiceAssistantListening = false) }
+        OverlayBridge.isVoiceListeningActive.value = false
+        addLog("Escuta de voz pausada.", LogLevel.INFO)
+    }
+
+    fun toggleVoiceAudible(enabled: Boolean) {
+        voiceAssistantEngine.isAudibleVoiceEnabled = enabled
+        updateState { copy(isVoiceAudibleEnabled = enabled) }
+        OverlayBridge.isTtsAudibleActive.value = enabled
+        if (enabled) {
+            voiceAssistantEngine.speakAloud("Voz audível ativada. Agora vou falar com você em alto e bom som.")
+        }
+    }
+
+    fun switchCameraFacing() {
+        val newFacing = !currentState.cameraFacingFront
+        updateState { copy(cameraFacingFront = newFacing) }
+        val label = if (newFacing) "Câmera Frontal (Selfie)" else "Câmera Traseira"
+        voiceAssistantEngine.speakAloud("Alternando para $label.")
+        addLog("Câmera ao vivo alternada para: $label", LogLevel.INFO)
+    }
+
     override fun onCleared() {
         super.onCleared()
         automationJob?.cancel()
@@ -1379,5 +1511,6 @@ class MainViewModel(application: Application) :
         autonomousPatrolJob?.cancel()
         forexTickerJob?.cancel()
         quantumCouncilJob?.cancel()
+        voiceAssistantEngine.destroy()
     }
 }
